@@ -29,7 +29,7 @@
   let loading          = false;
   let panelOpen        = false;
   let query            = '';
-  let viewMode         = 'time'; // 'time' | 'category'
+  let viewMode         = 'time'; // 'time' | 'dyna_category' | 'default_category'
   let expandedCategory = null;   // category name currently expanded
   let activeIndex      = -1;
   let flatItems        = [];
@@ -102,23 +102,20 @@
   }
 
   function getCategoryDefs() {
-    return dynamicCategorizationEnabled && dynamicCategoryDefs.length > 0
-      ? [...dynamicCategoryDefs, ...CATEGORY_DEFS]
-      : CATEGORY_DEFS;
+    return dynamicCategorizationEnabled ? dynamicCategoryDefs : CATEGORY_DEFS;
   }
 
-  function categorize(title) {
-    for (const cat of getCategoryDefs()) {
+  function categorizeWith(defs, title) {
+    for (const cat of defs) {
       if (cat.pattern.test(title)) return cat;
     }
     return GENERAL_CATEGORY;
   }
 
-  function groupByCategory(list) {
-    const defs = getCategoryDefs();
+  function groupByCategory(list, defs) {
     const map = new Map();
     for (const s of list) {
-      const cat = categorize(s.title || '');
+      const cat = categorizeWith(defs, s.title || '');
       if (!map.has(cat.name)) map.set(cat.name, { cat, items: [] });
       map.get(cat.name).items.push(s);
     }
@@ -283,11 +280,11 @@
 
     const valid = sessions.filter(s => s.id);
 
-    if (dynamicCategorizationEnabled) {
+    if (viewMode === 'dyna_category' && dynamicCategorizationEnabled) {
       dynamicCategoryDefs = buildDynamicCategories(valid);
     }
 
-    if (!dynamicCategorizationEnabled) {
+    if (viewMode === 'time') {
       const sorted = [...valid].sort((a, b) => b.updated_at - a.updated_at);
       if (query) {
         const matched = [];
@@ -321,46 +318,8 @@
       return;
     }
 
-    // ── Search mode: always flat by fuzzy score ──
-    if (query) {
-      const matched = [];
-      for (const s of valid) {
-        const m = fuzzyMatch(query, s.title || '');
-        if (m.matched) matched.push({ session: s, score: m.score, ranges: m.ranges });
-      }
-      matched.sort((a, b) => a.score - b.score);
-
-      if (matched.length === 0) {
-        getResultsEl().innerHTML = `<div class="ds-state-msg">No sessions match "${escHtml(query)}"</div>`;
-        return;
-      }
-      let html = '';
-      for (const { session, ranges } of matched) {
-        html += renderItem(session, ranges, flatItems.length);
-        flatItems.push(session);
-      }
-      getResultsEl().innerHTML = html;
-      return;
-    }
-
-    // ── Time mode: flat list sorted by updated_at desc ──
-    if (viewMode === 'time') {
-      const sorted = [...valid].sort((a, b) => b.updated_at - a.updated_at);
-      if (sorted.length === 0) {
-        getResultsEl().innerHTML = `<div class="ds-state-msg">No sessions found</div>`;
-        return;
-      }
-      let html = '';
-      for (const s of sorted) {
-        html += renderItem(s, [], flatItems.length);
-        flatItems.push(s);
-      }
-      getResultsEl().innerHTML = html;
-      return;
-    }
-
-    // ── Category mode: collapsed list, click to expand ──
-    const groups = groupByCategory(valid);
+    const defs = viewMode === 'dyna_category' ? dynamicCategoryDefs : CATEGORY_DEFS;
+    const groups = groupByCategory(valid, defs);
     if (groups.length === 0) {
       getResultsEl().innerHTML = `<div class="ds-state-msg">No sessions found</div>`;
       return;
@@ -388,11 +347,15 @@
   function updateFooter() {
     const modeHint = document.getElementById('ds-hint-mode');
     if (modeHint) {
-      modeHint.textContent = viewMode === 'time' ? 'by time' : 'by category';
+      modeHint.textContent = viewMode === 'time'
+        ? 'by time'
+        : viewMode === 'dyna_category'
+          ? 'dynamic category'
+          : 'default category';
     }
     const toggle = document.getElementById('ds-categorization-toggle');
     if (toggle) {
-      toggle.textContent = dynamicCategorizationEnabled ? 'Dyna Catego: On' : 'Dyn Catego: Off';
+      toggle.textContent = dynamicCategorizationEnabled ? 'Dyna Catego: On' : 'Dyna Catego: Off';
       toggle.setAttribute('aria-pressed', String(dynamicCategorizationEnabled));
     }
   }
@@ -434,6 +397,7 @@
     const toggle = document.getElementById('ds-categorization-toggle');
     let debounceTimer;
     loadDynamicCategorizationSetting();
+    if (viewMode === 'dyna_category' && dynamicCategorizationEnabled) dynamicCategoryDefs = [];
     input.addEventListener('input', () => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
@@ -487,8 +451,12 @@
 
   // ── Open / Close ──────────────────────────────────────────────────────────
 
-  async function openPanel() {
+  async function openPanel(mode = 'time') {
     panelOpen = true;
+    viewMode = mode;
+    if (viewMode === 'dyna_category') {
+      dynamicCategoryDefs = [];
+    }
     document.getElementById('ds-spotlight-overlay').classList.remove('ds-hidden');
 
     const input = document.getElementById('ds-spotlight-input');
@@ -497,14 +465,23 @@
     activeIndex = -1;
     input.focus();
 
-    if (sessions !== null) { renderResults(); return; }
+    if (sessions !== null) {
+      if (viewMode === 'dyna_category') dynamicCategoryDefs = buildDynamicCategories(sessions.filter(s => s.id));
+      renderResults();
+      updateFooter();
+      return;
+    }
     if (loading) return;
 
     loading = true;
     renderLoading();
     try {
       sessions = await fetchAllSessions();
-      if (panelOpen) renderResults();
+      if (panelOpen) {
+        if (viewMode === 'dyna_category') dynamicCategoryDefs = buildDynamicCategories(sessions.filter(s => s.id));
+        renderResults();
+        updateFooter();
+      }
     } catch (err) {
       sessions = null;
       if (panelOpen) renderError(err.message || 'Failed to load sessions');
@@ -529,19 +506,22 @@
     if (modKey && e.key === 'k') {
       e.preventDefault();
       e.stopPropagation();
-      if (panelOpen) closePanel(); else openPanel();
+      if (panelOpen) closePanel(); else openPanel(dynamicCategorizationEnabled ? 'dyna_category' : 'default_category');
       return;
     }
 
     if (modKey && e.key === 'l') {
       e.preventDefault();
       e.stopPropagation();
-      if (!panelOpen) return;
-      viewMode = viewMode === 'time' ? 'category' : 'time';
-      expandedCategory = null;
-      activeIndex = -1;
-      renderResults();
-      updateFooter();
+      if (panelOpen) {
+        viewMode = 'time';
+        expandedCategory = null;
+        activeIndex = -1;
+        renderResults();
+        updateFooter();
+      } else {
+        openPanel('time');
+      }
       return;
     }
 
