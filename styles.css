@@ -67,6 +67,24 @@
   color: rgba(0,0,0,0.3) !important;
 }
 
+#ds-categorization-toggle {
+  flex-shrink: 0 !important;
+  margin-left: 10px !important;
+  border: 0 !important;
+  border-radius: 5px !important;
+  padding: 3px 7px !important;
+  font: inherit !important;
+  font-size: 11px !important;
+  color: rgba(0,0,0,0.55) !important;
+  background: rgba(0,0,0,0.06) !important;
+  cursor: pointer !important;
+}
+
+#ds-categorization-toggle[aria-pressed="true"] {
+  color: #2563eb !important;
+  background: rgba(37, 99, 235, 0.12) !important;
+}
+
 #ds-spotlight-kbd {
   flex-shrink: 0 !important;
   font-size: 11px !important;

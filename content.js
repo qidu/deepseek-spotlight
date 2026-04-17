@@ -17,6 +17,11 @@
     { name: 'Life / Other',       icon: '🌿', pattern: /物候|人生|生活|文化|诗|散文|随笔/i },
   ];
   const GENERAL_CATEGORY = { name: 'General', icon: '💬' };
+  const STORAGE_KEYS = {
+    dynamicCategorization: 'ds-spotlight-dynamic-categorization',
+  };
+  const MAX_DYNAMIC_CATEGORIES = 8;
+  const MIN_DYNAMIC_DOCS = 2;
 
   // ── State ─────────────────────────────────────────────────────────────────
 
@@ -28,17 +33,89 @@
   let expandedCategory = null;   // category name currently expanded
   let activeIndex      = -1;
   let flatItems        = [];
+  let dynamicCategorizationEnabled = false;
+  let dynamicCategoryDefs = [];
+  let segmenter = null;
 
   // ── Categorization ────────────────────────────────────────────────────────
 
+  function setDynamicCategorizationEnabled(enabled) {
+    dynamicCategorizationEnabled = Boolean(enabled);
+    try {
+      localStorage.setItem(STORAGE_KEYS.dynamicCategorization, JSON.stringify(dynamicCategorizationEnabled));
+    } catch (_) {}
+  }
+
+  function loadDynamicCategorizationSetting() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.dynamicCategorization);
+      if (raw != null) dynamicCategorizationEnabled = JSON.parse(raw);
+    } catch (_) {}
+    return dynamicCategorizationEnabled;
+  }
+
+  function initSegmenter() {
+    if (segmenter) return segmenter;
+    const api = window.Segmentit;
+    if (!api || !api.Segment || !api.useDefault) return null;
+    segmenter = api.useDefault(new api.Segment());
+    return segmenter;
+  }
+
+  function tokenize(text) {
+    const seg = initSegmenter();
+    if (seg && typeof seg.doSegment === 'function') {
+      return seg.doSegment(text || '', {
+        simple: true,
+        stripPunctuation: true,
+        stripStopword: true,
+        convertSynonym: true,
+      }).filter(token => token && token.trim().length > 0);
+    }
+    return (String(text || '').toLowerCase().match(/[\u4e00-\u9fa5a-zA-Z0-9]+/g) || []).filter(token => token.length > 1 || /[\u4e00-\u9fa5]/.test(token));
+  }
+
+  function escapeRegExp(text) {
+    return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function buildDynamicCategories(list) {
+    const docFreq = new Map();
+    for (const session of list) {
+      const uniqueTokens = new Set(tokenize(session.title || '')
+        .map(token => token.trim())
+        .filter(token => token.length > 1 || /[\u4e00-\u9fa5]/.test(token)));
+      for (const token of uniqueTokens) {
+        docFreq.set(token, (docFreq.get(token) || 0) + 1);
+      }
+    }
+
+    return [...docFreq.entries()]
+      .filter(([, count]) => count >= MIN_DYNAMIC_DOCS)
+      .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
+      .slice(0, MAX_DYNAMIC_CATEGORIES)
+      .map(([token]) => ({
+        name: token,
+        icon: '🏷️',
+        pattern: new RegExp(/[\u4e00-\u9fa5]/.test(token) ? escapeRegExp(token) : `\\b${escapeRegExp(token)}\\b`, 'i'),
+      }));
+  }
+
+  function getCategoryDefs() {
+    return dynamicCategorizationEnabled && dynamicCategoryDefs.length > 0
+      ? [...dynamicCategoryDefs, ...CATEGORY_DEFS]
+      : CATEGORY_DEFS;
+  }
+
   function categorize(title) {
-    for (const cat of CATEGORY_DEFS) {
+    for (const cat of getCategoryDefs()) {
       if (cat.pattern.test(title)) return cat;
     }
     return GENERAL_CATEGORY;
   }
 
   function groupByCategory(list) {
+    const defs = getCategoryDefs();
     const map = new Map();
     for (const s of list) {
       const cat = categorize(s.title || '');
@@ -47,7 +124,7 @@
     }
     for (const [, g] of map) g.items.sort((a, b) => b.updated_at - a.updated_at);
     const ordered = [];
-    for (const def of [...CATEGORY_DEFS, GENERAL_CATEGORY]) {
+    for (const def of [...defs, GENERAL_CATEGORY]) {
       if (map.has(def.name)) ordered.push(map.get(def.name));
     }
     return ordered;
@@ -206,6 +283,44 @@
 
     const valid = sessions.filter(s => s.id);
 
+    if (dynamicCategorizationEnabled) {
+      dynamicCategoryDefs = buildDynamicCategories(valid);
+    }
+
+    if (!dynamicCategorizationEnabled) {
+      const sorted = [...valid].sort((a, b) => b.updated_at - a.updated_at);
+      if (query) {
+        const matched = [];
+        for (const s of sorted) {
+          const m = fuzzyMatch(query, s.title || '');
+          if (m.matched) matched.push({ session: s, score: m.score, ranges: m.ranges });
+        }
+        matched.sort((a, b) => a.score - b.score);
+        if (matched.length === 0) {
+          getResultsEl().innerHTML = `<div class="ds-state-msg">No sessions match "${escHtml(query)}"</div>`;
+          return;
+        }
+        let html = '';
+        for (const { session, ranges } of matched) {
+          html += renderItem(session, ranges, flatItems.length);
+          flatItems.push(session);
+        }
+        getResultsEl().innerHTML = html;
+        return;
+      }
+      if (sorted.length === 0) {
+        getResultsEl().innerHTML = `<div class="ds-state-msg">No sessions found</div>`;
+        return;
+      }
+      let html = '';
+      for (const s of sorted) {
+        html += renderItem(s, [], flatItems.length);
+        flatItems.push(s);
+      }
+      getResultsEl().innerHTML = html;
+      return;
+    }
+
     // ── Search mode: always flat by fuzzy score ──
     if (query) {
       const matched = [];
@@ -275,6 +390,11 @@
     if (modeHint) {
       modeHint.textContent = viewMode === 'time' ? 'by time' : 'by category';
     }
+    const toggle = document.getElementById('ds-categorization-toggle');
+    if (toggle) {
+      toggle.textContent = dynamicCategorizationEnabled ? 'Dyna Catego: On' : 'Dyn Catego: Off';
+      toggle.setAttribute('aria-pressed', String(dynamicCategorizationEnabled));
+    }
   }
 
   // ── Panel DOM ─────────────────────────────────────────────────────────────
@@ -292,6 +412,7 @@
             <circle cx="9" cy="9" r="6"/><line x1="13.5" y1="13.5" x2="18" y2="18"/>
           </svg>
           <input id="ds-spotlight-input" type="text" placeholder="Search chats…" autocomplete="off" spellcheck="false" aria-label="Search chats"/>
+          <button id="ds-categorization-toggle" type="button" aria-pressed="false">dynamic cat: off</button>
           <span id="ds-spotlight-kbd">esc</span>
         </div>
         <div id="ds-spotlight-results" role="listbox"></div>
@@ -310,7 +431,9 @@
     });
 
     const input = document.getElementById('ds-spotlight-input');
+    const toggle = document.getElementById('ds-categorization-toggle');
     let debounceTimer;
+    loadDynamicCategorizationSetting();
     input.addEventListener('input', () => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
@@ -319,6 +442,12 @@
         renderResults();
       }, 50);
     });
+    toggle.addEventListener('click', () => {
+      setDynamicCategorizationEnabled(!dynamicCategorizationEnabled);
+      renderResults();
+      updateFooter();
+    });
+    updateFooter();
 
     overlay.addEventListener('click', e => {
       const catRow = e.target.closest('.ds-cat-row');

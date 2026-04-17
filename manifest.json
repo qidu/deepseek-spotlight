@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
   "name": "DeepSeek Spotlight",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Cmd+K spotlight search panel for DeepSeek chat sessions",
   "host_permissions": ["https://chat.deepseek.com/*"],
   "content_scripts": [
     {
       "matches": ["https://chat.deepseek.com/*"],
-      "js": ["content.js"],
+      "js": ["segmentit@2.03.js", "content.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"
     }
