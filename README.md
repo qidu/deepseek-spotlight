@@ -7,7 +7,7 @@ It could provide you better chat sessions list, category, and search experiences
 
 ## Features
 
-- **Instant search** — fuzzy search across all your chat session titles
+- **Instant search** — fuzzy search across chat session titles and category names
 - **Multiple browsing modes** — jump into time view, built-in category view, or dynamic category view
 - **Keyboard-driven** — open, navigate, and select without touching the mouse
 - **Dynamic categorization toggle** — generate categories from repeated keywords in your chat titles
@@ -68,7 +68,9 @@ Click a category row to expand and show its sessions sorted by last updated time
 
 ### Search
 
-Type in the search box to fuzzy-search session titles. Results are ranked by match quality regardless of view mode.
+Type in the search box to fuzzy-search session titles in every view. In `Cmd+K` / `Ctrl+K` category views, search also matches category names, including dynamic categories generated from repeated keywords.
+
+When searching in category views, matching groups expand automatically so you can see matching chat titles immediately. Results are ranked by match quality.
 
 Dynamic categories are built from the current session list and cached while the panel stays open, then rebuilt when you reopen the dynamic category view or change the dynamic categorization toggle.
 

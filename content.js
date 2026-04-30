@@ -371,6 +371,16 @@
       </div>`;
   }
 
+  function renderCategoryRow(cat, count, isExpanded, ranges = []) {
+    return `
+      <div class="ds-cat-row${isExpanded ? ' ds-cat-expanded' : ''}" data-cat="${escHtml(cat.name)}">
+        <span class="ds-cat-icon">${escHtml(cat.icon)}</span>
+        <span class="ds-cat-name">${highlightTitle(cat.name, ranges)}</span>
+        <span class="ds-cat-count">${count}</span>
+        <span class="ds-cat-chevron">${isExpanded ? '▾' : '▸'}</span>
+      </div>`;
+  }
+
   function renderResults() {
     flatItems = [];
     if (!sessions) { renderLoading(); return; }
@@ -418,20 +428,45 @@
       getResultsEl().innerHTML = `<div class="ds-state-msg">No sessions found</div>`;
       return;
     }
+
+    const shouldFilterGrouped = Boolean(query);
+    let grouped = groups;
+
+    if (shouldFilterGrouped) {
+      grouped = groups.map(({ cat, items }) => {
+        const categoryMatch = fuzzyMatch(query, cat.name || '');
+        const matchedItems = [];
+        for (const session of items) {
+          const match = fuzzyMatch(query, session.title || '');
+          if (match.matched) matchedItems.push({ session, ranges: match.ranges, score: match.score });
+        }
+        matchedItems.sort((a, b) => a.score - b.score);
+        return {
+          cat,
+          categoryRanges: categoryMatch.matched ? categoryMatch.ranges : [],
+          categoryMatched: categoryMatch.matched,
+          matchedItems,
+        };
+      }).filter(group => group.categoryMatched || group.matchedItems.length > 0);
+
+      if (grouped.length === 0) {
+        getResultsEl().innerHTML = `<div class="ds-state-msg">No sessions match "${escHtml(query)}"</div>`;
+        return;
+      }
+    }
+
     let html = '';
-    for (const { cat, items } of groups) {
-      const isExpanded = expandedCategory === cat.name;
-      html += `
-        <div class="ds-cat-row${isExpanded ? ' ds-cat-expanded' : ''}" data-cat="${escHtml(cat.name)}">
-          <span class="ds-cat-icon">${escHtml(cat.icon)}</span>
-          <span class="ds-cat-name">${escHtml(cat.name)}</span>
-          <span class="ds-cat-count">${items.length}</span>
-          <span class="ds-cat-chevron">${isExpanded ? '▾' : '▸'}</span>
-        </div>`;
+    for (const group of grouped) {
+      const { cat } = group;
+      const items = shouldFilterGrouped ? group.matchedItems.map(entry => entry.session) : group.items;
+      const isExpanded = shouldFilterGrouped ? true : expandedCategory === cat.name;
+      const categoryRanges = shouldFilterGrouped ? group.categoryRanges : [];
+      html += renderCategoryRow(cat, items.length, isExpanded, categoryRanges);
       if (isExpanded) {
-        for (const s of items) {
-          html += renderItem(s, [], flatItems.length);
-          flatItems.push(s);
+        const itemEntries = shouldFilterGrouped ? group.matchedItems : items.map(session => ({ session, ranges: [] }));
+        for (const entry of itemEntries) {
+          html += renderItem(entry.session, entry.ranges || [], flatItems.length);
+          flatItems.push(entry.session);
         }
       }
     }
