@@ -8,8 +8,9 @@ It could provide you better chat sessions list, category, and search experiences
 ## Features
 
 - **Instant search** — fuzzy search across all your chat session titles
-- **Two view modes** — browse by recency or by topic category
+- **Multiple browsing modes** — jump into time view, built-in category view, or dynamic category view
 - **Keyboard-driven** — open, navigate, and select without touching the mouse
+- **Dynamic categorization toggle** — generate categories from repeated keywords in your chat titles
 - **Auto-auth** — reads your session token from the page, no setup required
 
 ---
@@ -32,17 +33,17 @@ The extension only activates on `https://chat.deepseek.com/*`.
 
 | Shortcut | macOS | Windows / Linux |
 |----------|-------|-----------------|
-| Open / close panel | `Cmd+K` | `Ctrl+K` |
-| Toggle view mode | `Cmd+L` | `Ctrl+L` |
+| Open category panel | `Cmd+K` | `Ctrl+K` |
+| Open time panel | `Cmd+L` | `Ctrl+L` |
 | Navigate items | `↑` / `↓` | `↑` / `↓` |
 | Open session | `Enter` | `Enter` |
 | Close panel | `Esc` | `Esc` |
 
 ### View modes
 
-**Time mode** (default) — all sessions listed as a flat list, most recently updated first.
+**Time mode** (`Cmd+L` / `Ctrl+L`) — all sessions listed as a flat list, most recently updated first.
 
-**Category mode** (`Cmd+L` / `Ctrl+L`) — sessions grouped by topic:
+**Default category mode** (`Cmd+K` / `Ctrl+K`, with dynamic categorization off) — sessions grouped by built-in topic buckets:
 
 | Category | Topics |
 |----------|--------|
@@ -59,11 +60,17 @@ The extension only activates on `https://chat.deepseek.com/*`.
 | 🌿 Life / Other | poetry, culture, general… |
 | 💬 General | everything else |
 
+**Dynamic category mode** (`Cmd+K` / `Ctrl+K`, with dynamic categorization on) — categories are generated from repeated keywords in your session titles. Each session is assigned to its strongest matching keyword based on document frequency, token length, and how early the term appears in the title.
+
+Use the `dynamic cat` toggle in the panel header to switch between default and dynamic category grouping.
+
 Click a category row to expand and show its sessions sorted by last updated time. Click again to collapse.
 
 ### Search
 
 Type in the search box to fuzzy-search session titles. Results are ranked by match quality regardless of view mode.
+
+Dynamic categories are built from the current session list and cached while the panel stays open, then rebuilt when you reopen the dynamic category view or change the dynamic categorization toggle.
 
 ---
 

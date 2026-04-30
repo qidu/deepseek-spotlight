@@ -20,8 +20,7 @@
   const STORAGE_KEYS = {
     dynamicCategorization: 'ds-spotlight-dynamic-categorization',
   };
-  const MAX_DYNAMIC_CATEGORIES = 8;
-  const MIN_DYNAMIC_DOCS = 2;
+  const MIN_DYNAMIC_DOCS = 3;
 
   // ── State ─────────────────────────────────────────────────────────────────
 
@@ -34,7 +33,7 @@
   let activeIndex      = -1;
   let flatItems        = [];
   let dynamicCategorizationEnabled = false;
-  let dynamicCategoryDefs = [];
+  let dynamicCategoryModel = null;
   let segmenter = null;
 
   // ── Categorization ────────────────────────────────────────────────────────
@@ -79,30 +78,128 @@
     return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
-  function buildDynamicCategories(list) {
+  function normalizeDynamicToken(token) {
+    const raw = String(token || '').trim();
+    if (!raw) return null;
+    const isCJK = /[\u4e00-\u9fa5]/.test(raw);
+    const value = isCJK ? raw : raw.toLowerCase();
+    if (!value) return null;
+    if (!isCJK && value.length <= 1) return null;
+    return { value, isCJK, length: value.length };
+  }
+
+  function analyzeSessionTokens(title) {
+    const orderedTokens = [];
+    const seen = new Set();
+    const firstPos = new Map();
+    for (const token of tokenize(title || '')) {
+      const normalized = normalizeDynamicToken(token);
+      if (!normalized) continue;
+      orderedTokens.push(normalized);
+      if (!seen.has(normalized.value)) {
+        seen.add(normalized.value);
+        firstPos.set(normalized.value, orderedTokens.length - 1);
+      }
+    }
+    return { orderedTokens, uniqueTokens: [...seen], firstPos };
+  }
+
+  function compareDynamicDefs(a, b) {
+    return (b.docFreq - a.docFreq)
+      || (b.length - a.length)
+      || (a.firstSeenOrder - b.firstSeenOrder)
+      || a.name.localeCompare(b.name);
+  }
+
+  function scoreDynamicCandidate(a, b) {
+    return (b.docFreq - a.docFreq)
+      || (b.length - a.length)
+      || (a.position - b.position)
+      || (a.rank - b.rank);
+  }
+
+  function buildDynamicCategoryModel(list) {
     const docFreq = new Map();
+    const tokenMeta = new Map();
+    const sessionTokens = new Map();
+    let firstSeenCounter = 0;
+
     for (const session of list) {
-      const uniqueTokens = new Set(tokenize(session.title || '')
-        .map(token => token.trim())
-        .filter(token => token.length > 1 || /[\u4e00-\u9fa5]/.test(token)));
-      for (const token of uniqueTokens) {
+      const analysis = analyzeSessionTokens(session.title || '');
+      sessionTokens.set(session.id, analysis);
+      for (const token of analysis.uniqueTokens) {
         docFreq.set(token, (docFreq.get(token) || 0) + 1);
+        if (!tokenMeta.has(token)) {
+          const tokenInfo = analysis.orderedTokens.find(entry => entry.value === token);
+          tokenMeta.set(token, {
+            isCJK: tokenInfo ? tokenInfo.isCJK : /[\u4e00-\u9fa5]/.test(token),
+            length: token.length,
+            firstSeenOrder: firstSeenCounter++,
+          });
+        }
       }
     }
 
-    return [...docFreq.entries()]
+    const defs = [...docFreq.entries()]
       .filter(([, count]) => count >= MIN_DYNAMIC_DOCS)
-      .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
-      .slice(0, MAX_DYNAMIC_CATEGORIES)
-      .map(([token]) => ({
-        name: token,
-        icon: '🏷️',
-        pattern: new RegExp(/[\u4e00-\u9fa5]/.test(token) ? escapeRegExp(token) : `\\b${escapeRegExp(token)}\\b`, 'i'),
-      }));
+      .map(([token, count]) => {
+        const meta = tokenMeta.get(token) || { isCJK: /[\u4e00-\u9fa5]/.test(token), length: token.length, firstSeenOrder: Number.MAX_SAFE_INTEGER };
+        return {
+          name: token,
+          token,
+          icon: '🏷️',
+          docFreq: count,
+          isCJK: meta.isCJK,
+          length: meta.length,
+          firstSeenOrder: meta.firstSeenOrder,
+          pattern: new RegExp(meta.isCJK ? escapeRegExp(token) : `\\b${escapeRegExp(token)}\\b`, 'i'),
+        };
+      })
+      .sort(compareDynamicDefs)
+      .map((def, index) => ({ ...def, rank: index }));
+
+    const defsByToken = new Map(defs.map(def => [def.token, def]));
+    const sessionAssignments = new Map();
+    const assignedCounts = new Map();
+
+    for (const session of list) {
+      const analysis = sessionTokens.get(session.id) || analyzeSessionTokens(session.title || '');
+      const candidates = analysis.uniqueTokens
+        .map(token => {
+          const def = defsByToken.get(token);
+          if (!def) return null;
+          return {
+            ...def,
+            position: analysis.firstPos.get(token) ?? Number.MAX_SAFE_INTEGER,
+          };
+        })
+        .filter(Boolean)
+        .sort(scoreDynamicCandidate);
+      const assigned = candidates[0] || GENERAL_CATEGORY;
+      sessionAssignments.set(session.id, assigned);
+      if (assigned.name !== GENERAL_CATEGORY.name) {
+        assignedCounts.set(assigned.name, (assignedCounts.get(assigned.name) || 0) + 1);
+      }
+    }
+
+    for (const [sessionId, assigned] of sessionAssignments.entries()) {
+      if (assigned.name !== GENERAL_CATEGORY.name && (assignedCounts.get(assigned.name) || 0) < 2) {
+        sessionAssignments.set(sessionId, GENERAL_CATEGORY);
+      }
+    }
+
+    return {
+      defs,
+      defsByToken,
+      sessionTokens,
+      sessionAssignments,
+    };
   }
 
-  function getCategoryDefs() {
-    return dynamicCategorizationEnabled ? dynamicCategoryDefs : CATEGORY_DEFS;
+  function getDynamicCategoryModel(list) {
+    if (!dynamicCategorizationEnabled) return null;
+    if (!dynamicCategoryModel) dynamicCategoryModel = buildDynamicCategoryModel(list);
+    return dynamicCategoryModel;
   }
 
   function categorizeWith(defs, title) {
@@ -112,10 +209,10 @@
     return GENERAL_CATEGORY;
   }
 
-  function groupByCategory(list, defs) {
+  function groupByCategory(list, defs, model = null) {
     const map = new Map();
     for (const s of list) {
-      const cat = categorizeWith(defs, s.title || '');
+      const cat = model ? (model.sessionAssignments.get(s.id) || GENERAL_CATEGORY) : categorizeWith(defs, s.title || '');
       if (!map.has(cat.name)) map.set(cat.name, { cat, items: [] });
       map.get(cat.name).items.push(s);
     }
@@ -279,10 +376,7 @@
     if (!sessions) { renderLoading(); return; }
 
     const valid = sessions.filter(s => s.id);
-
-    if (viewMode === 'dyna_category' && dynamicCategorizationEnabled) {
-      dynamicCategoryDefs = buildDynamicCategories(valid);
-    }
+    const dynamicModel = viewMode === 'dyna_category' ? getDynamicCategoryModel(valid) : null;
 
     if (viewMode === 'time') {
       const sorted = [...valid].sort((a, b) => b.updated_at - a.updated_at);
@@ -318,8 +412,8 @@
       return;
     }
 
-    const defs = viewMode === 'dyna_category' ? dynamicCategoryDefs : CATEGORY_DEFS;
-    const groups = groupByCategory(valid, defs);
+    const defs = viewMode === 'dyna_category' ? (dynamicModel ? dynamicModel.defs : []) : CATEGORY_DEFS;
+    const groups = groupByCategory(valid, defs, dynamicModel);
     if (groups.length === 0) {
       getResultsEl().innerHTML = `<div class="ds-state-msg">No sessions found</div>`;
       return;
@@ -397,7 +491,6 @@
     const toggle = document.getElementById('ds-categorization-toggle');
     let debounceTimer;
     loadDynamicCategorizationSetting();
-    if (viewMode === 'dyna_category' && dynamicCategorizationEnabled) dynamicCategoryDefs = [];
     input.addEventListener('input', () => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
@@ -408,6 +501,7 @@
     });
     toggle.addEventListener('click', () => {
       setDynamicCategorizationEnabled(!dynamicCategorizationEnabled);
+      dynamicCategoryModel = null;
       renderResults();
       updateFooter();
     });
@@ -455,7 +549,7 @@
     panelOpen = true;
     viewMode = mode;
     if (viewMode === 'dyna_category') {
-      dynamicCategoryDefs = [];
+      dynamicCategoryModel = null;
     }
     document.getElementById('ds-spotlight-overlay').classList.remove('ds-hidden');
 
@@ -466,7 +560,7 @@
     input.focus();
 
     if (sessions !== null) {
-      if (viewMode === 'dyna_category') dynamicCategoryDefs = buildDynamicCategories(sessions.filter(s => s.id));
+      if (viewMode === 'dyna_category') getDynamicCategoryModel(sessions.filter(s => s.id));
       renderResults();
       updateFooter();
       return;
@@ -478,7 +572,7 @@
     try {
       sessions = await fetchAllSessions();
       if (panelOpen) {
-        if (viewMode === 'dyna_category') dynamicCategoryDefs = buildDynamicCategories(sessions.filter(s => s.id));
+        if (viewMode === 'dyna_category') getDynamicCategoryModel(sessions.filter(s => s.id));
         renderResults();
         updateFooter();
       }
