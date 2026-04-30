@@ -60,7 +60,7 @@ The extension only activates on `https://chat.deepseek.com/*`.
 | 🌿 Life / Other | poetry, culture, general… |
 | 💬 General | everything else |
 
-**Dynamic category mode** (`Cmd+K` / `Ctrl+K`, with dynamic categorization on) — categories are generated from repeated keywords in your session titles. Each session is assigned to its strongest matching keyword based on document frequency, token length, and how early the term appears in the title.
+**Dynamic category mode** (`Cmd+K` / `Ctrl+K`, with dynamic categorization on) — categories are generated from repeated noun terms in chat titles. Segmentit is initialized with an expanded custom noun dictionary so domain phrases can be recognized as nouns more reliably, while common English pronouns, determiners, prepositions, and interjections are excluded. Title prefix/postfix phrases are only used as a fallback when no repeated noun category is strong enough. Each session is assigned to its strongest matching category based on noun-first priority, then document frequency, token length, and how early the term appears in the title.
 
 Use the `dynamic cat` toggle in the panel header to switch between default and dynamic category grouping.
 

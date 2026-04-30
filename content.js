@@ -21,6 +21,20 @@
     dynamicCategorization: 'ds-spotlight-dynamic-categorization',
   };
   const MIN_DYNAMIC_DOCS = 3;
+  const DYNAMIC_TITLE_FALLBACK_SIZE = 2;
+  const DYNAMIC_CATEGORY_SOURCE_PRIORITY = {
+    noun: 0,
+    prefix: 1,
+    postfix: 2,
+  };
+  const DYNAMIC_CATEGORY_CUSTOM_NOUNS = [
+    'ai', 'agent', 'agents', 'api', 'apis', 'app', 'apps', 'auth', 'authentication', 'authorization', 'backend', 'benchmark', 'benchmarks', 'browser', 'bug', 'bugs', 'cache', 'chat', 'chats', 'ci', 'cli', 'client', 'cloud', 'code', 'commit', 'commits', 'component', 'components', 'container', 'containers', 'css', 'dashboard', 'data', 'database', 'databases', 'debug', 'deploy', 'deployment', 'deployments', 'design', 'diff', 'docker', 'docs', 'documentation', 'embedding', 'embeddings', 'endpoint', 'endpoints', 'error', 'errors', 'feature', 'features', 'fix', 'frontend', 'git', 'github', 'golang', 'hook', 'hooks', 'html', 'http', 'https', 'issue', 'issues', 'java', 'javascript', 'job', 'jobs', 'json', 'jwt', 'kubernetes', 'k8s', 'layout', 'library', 'libraries', 'linux', 'llm', 'log', 'logs', 'macos', 'manifest', 'migration', 'migrations', 'model', 'models', 'module', 'modules', 'monitor', 'monitoring', 'mysql', 'network', 'node', 'npm', 'oauth', 'panel', 'pipeline', 'pipelines', 'plugin', 'plugins', 'postgres', 'postgresql', 'prompt', 'prompts', 'python', 'query', 'queries', 'react', 'redis', 'refactor', 'release', 'repo', 'repository', 'request', 'requests', 'response', 'responses', 'routing', 'rust', 'schema', 'schemas', 'script', 'scripts', 'search', 'sdk', 'server', 'service', 'services', 'session', 'sessions', 'shell', 'sidebar', 'sql', 'state', 'storage', 'style', 'styles', 'tailwind', 'task', 'tasks', 'terminal', 'test', 'tests', 'theme', 'token', 'tokens', 'typescript', 'ui', 'url', 'user', 'users', 'vector', 'vectors', 'version', 'vite', 'vue', 'web', 'webhook', 'webpack', 'widget', 'window', 'workflow', 'workflows', 'extension', 'extensions', 'spotlight', 'deepseek',
+    'machine learning', 'artificial intelligence', 'deep learning', 'natural language processing', 'prompt engineering', 'context window', 'vector database', 'rate limit', 'release note', 'release notes', 'pull request', 'pull requests', 'code review', 'chat session', 'chat sessions', 'dynamic category', 'dynamic categories', 'default category', 'search panel', 'content script', 'chrome extension', 'browser extension'
+  ];
+  const ENGLISH_DYNAMIC_CATEGORY_BLOCKLIST = new Set([
+    'a', 'an', 'another', 'any', 'anybody', 'anyone', 'anything', 'both', 'each', 'either', 'enough', 'every', 'everybody', 'everyone', 'everything', 'few', 'fewer', 'he', 'her', 'hers', 'herself', 'hey', 'him', 'himself', 'his', 'i', 'it', 'its', 'itself', 'little', 'many', 'me', 'mine', 'more', 'most', 'much', 'my', 'myself', 'neither', 'no', 'nobody', 'none', 'nothing', 'oh', 'other', 'others', 'ouch', 'our', 'ours', 'ourselves', 'several', 'she', 'some', 'somebody', 'someone', 'something', 'such', 'that', 'the', 'their', 'theirs', 'them', 'themselves', 'these', 'they', 'this', 'those', 'to', 'us', 'we', 'what', 'whatever', 'which', 'whichever', 'who', 'whom', 'whose', 'wow', 'you', 'your', 'yours', 'yourself', 'yourselves',
+    'about', 'above', 'across', 'after', 'against', 'alas', 'along', 'among', 'around', 'as', 'at', 'before', 'behind', 'below', 'beneath', 'beside', 'besides', 'between', 'beyond', 'by', 'down', 'for', 'from', 'in', 'inside', 'into', 'near', 'of', 'off', 'on', 'onto', 'out', 'outside', 'over', 'through', 'throughout', 'toward', 'towards', 'under', 'underneath', 'up', 'upon', 'with', 'within', 'without',
+  ]);
 
   // ── State ─────────────────────────────────────────────────────────────────
 
@@ -35,6 +49,7 @@
   let dynamicCategorizationEnabled = false;
   let dynamicCategoryModel = null;
   let segmenter = null;
+  let dynamicNounDictLoaded = false;
 
   // ── Categorization ────────────────────────────────────────────────────────
 
@@ -58,18 +73,35 @@
     const api = window.Segmentit;
     if (!api || !api.Segment || !api.useDefault) return null;
     segmenter = api.useDefault(new api.Segment());
+    loadDynamicNounDict(segmenter);
     return segmenter;
   }
 
-  function tokenize(text) {
+  function loadDynamicNounDict(seg) {
+    if (!seg || dynamicNounDictLoaded || typeof seg.loadDict !== 'function') return;
+    const postag = seg.POSTAG;
+    const nounTag = postag ? postag.D_N : 0;
+    const lines = DYNAMIC_CATEGORY_CUSTOM_NOUNS
+      .map(noun => `${noun}|${nounTag}|100`)
+      .join('\n');
+    if (!lines) return;
+    seg.loadDict(lines, 'TABLE', true);
+    dynamicNounDictLoaded = true;
+  }
+
+  function tokenize(text, options = {}) {
     const seg = initSegmenter();
     if (seg && typeof seg.doSegment === 'function') {
-      return seg.doSegment(text || '', {
-        simple: true,
+      const tokens = seg.doSegment(text || '', {
+        simple: false,
         stripPunctuation: true,
         stripStopword: true,
         convertSynonym: true,
-      }).filter(token => token && token.trim().length > 0);
+      });
+      if (options.includeMeta) return tokens.filter(token => token && String(token.w || '').trim().length > 0);
+      return tokens
+        .map(token => token && token.w)
+        .filter(token => token && token.trim().length > 0);
     }
     return (String(text || '').toLowerCase().match(/[\u4e00-\u9fa5a-zA-Z0-9]+/g) || []).filter(token => token.length > 1 || /[\u4e00-\u9fa5]/.test(token));
   }
@@ -85,34 +117,103 @@
     const value = isCJK ? raw : raw.toLowerCase();
     if (!value) return null;
     if (!isCJK && value.length <= 1) return null;
+    if (!isCJK && ENGLISH_DYNAMIC_CATEGORY_BLOCKLIST.has(value)) return null;
     return { value, isCJK, length: value.length };
   }
 
+  function getSegmentPosValue(token) {
+    if (!token || token.p == null) return 0;
+    if (Array.isArray(token.p)) return token.p[0] || 0;
+    return token.p;
+  }
+
+  function getDynamicPostag() {
+    const seg = initSegmenter();
+    return seg && seg.POSTAG ? seg.POSTAG : null;
+  }
+
+  function isDynamicNoun(token, postag = getDynamicPostag()) {
+    if (!postag) return false;
+    const pos = getSegmentPosValue(token);
+    return Boolean(
+      pos === postag.D_N
+      || pos === postag.A_NR
+      || pos === postag.A_NS
+      || pos === postag.A_NT
+      || pos === postag.A_NX
+      || pos === postag.A_NZ
+      || pos === postag.URL
+      || (pos & postag.D_N)
+      || (pos & postag.A_NR)
+      || (pos & postag.A_NS)
+      || (pos & postag.A_NT)
+      || (pos & postag.A_NX)
+      || (pos & postag.A_NZ)
+    );
+  }
+
+  function createDynamicCandidate(rawValue, source, position) {
+    const normalized = normalizeDynamicToken(rawValue);
+    if (!normalized) return null;
+    return {
+      ...normalized,
+      source,
+      sourcePriority: DYNAMIC_CATEGORY_SOURCE_PRIORITY[source] ?? Number.MAX_SAFE_INTEGER,
+      position,
+    };
+  }
+
+  function tokenizeTitleWords(title) {
+    return (String(title || '').match(/[\u4e00-\u9fa5a-zA-Z0-9]+/g) || []).filter(Boolean);
+  }
+
+  function buildDynamicEdgeCandidates(title, basePosition) {
+    const parts = tokenizeTitleWords(title).filter(part => normalizeDynamicToken(part));
+    if (parts.length < DYNAMIC_TITLE_FALLBACK_SIZE) return [];
+    const prefix = createDynamicCandidate(parts.slice(0, DYNAMIC_TITLE_FALLBACK_SIZE).join(' '), 'prefix', basePosition);
+    const postfix = createDynamicCandidate(parts.slice(-DYNAMIC_TITLE_FALLBACK_SIZE).join(' '), 'postfix', basePosition + 1);
+    return [prefix, postfix].filter(Boolean);
+  }
+
   function analyzeSessionTokens(title) {
-    const orderedTokens = [];
+    const orderedCandidates = [];
     const seen = new Set();
     const firstPos = new Map();
-    for (const token of tokenize(title || '')) {
-      const normalized = normalizeDynamicToken(token);
-      if (!normalized) continue;
-      orderedTokens.push(normalized);
-      if (!seen.has(normalized.value)) {
-        seen.add(normalized.value);
-        firstPos.set(normalized.value, orderedTokens.length - 1);
-      }
+    const tokenObjects = tokenize(title || '', { includeMeta: true });
+    const plainTokens = Array.isArray(tokenObjects) && tokenObjects.length > 0 && typeof tokenObjects[0] === 'object'
+      ? tokenObjects
+      : tokenize(title || '').map(token => ({ w: token, p: 0 }));
+    let order = 0;
+
+    const pushCandidate = candidate => {
+      if (!candidate || seen.has(candidate.value)) return;
+      seen.add(candidate.value);
+      firstPos.set(candidate.value, candidate.position);
+      orderedCandidates.push(candidate);
+    };
+
+    for (const token of plainTokens) {
+      if (isDynamicNoun(token)) pushCandidate(createDynamicCandidate(token.w, 'noun', order++));
     }
-    return { orderedTokens, uniqueTokens: [...seen], firstPos };
+
+    for (const candidate of buildDynamicEdgeCandidates(title, order)) {
+      pushCandidate(candidate);
+    }
+
+    return { orderedTokens: orderedCandidates, uniqueTokens: orderedCandidates.map(entry => entry.value), firstPos };
   }
 
   function compareDynamicDefs(a, b) {
-    return (b.docFreq - a.docFreq)
+    return (a.sourcePriority - b.sourcePriority)
+      || (b.docFreq - a.docFreq)
       || (b.length - a.length)
       || (a.firstSeenOrder - b.firstSeenOrder)
       || a.name.localeCompare(b.name);
   }
 
   function scoreDynamicCandidate(a, b) {
-    return (b.docFreq - a.docFreq)
+    return (a.sourcePriority - b.sourcePriority)
+      || (b.docFreq - a.docFreq)
       || (b.length - a.length)
       || (a.position - b.position)
       || (a.rank - b.rank);
@@ -134,6 +235,8 @@
           tokenMeta.set(token, {
             isCJK: tokenInfo ? tokenInfo.isCJK : /[\u4e00-\u9fa5]/.test(token),
             length: token.length,
+            source: tokenInfo ? tokenInfo.source : 'noun',
+            sourcePriority: tokenInfo ? tokenInfo.sourcePriority : Number.MAX_SAFE_INTEGER,
             firstSeenOrder: firstSeenCounter++,
           });
         }
@@ -143,7 +246,13 @@
     const defs = [...docFreq.entries()]
       .filter(([, count]) => count >= MIN_DYNAMIC_DOCS)
       .map(([token, count]) => {
-        const meta = tokenMeta.get(token) || { isCJK: /[\u4e00-\u9fa5]/.test(token), length: token.length, firstSeenOrder: Number.MAX_SAFE_INTEGER };
+        const meta = tokenMeta.get(token) || {
+          isCJK: /[\u4e00-\u9fa5]/.test(token),
+          length: token.length,
+          source: 'noun',
+          sourcePriority: DYNAMIC_CATEGORY_SOURCE_PRIORITY.noun,
+          firstSeenOrder: Number.MAX_SAFE_INTEGER,
+        };
         return {
           name: token,
           token,
@@ -151,6 +260,8 @@
           docFreq: count,
           isCJK: meta.isCJK,
           length: meta.length,
+          source: meta.source,
+          sourcePriority: meta.sourcePriority,
           firstSeenOrder: meta.firstSeenOrder,
           pattern: new RegExp(meta.isCJK ? escapeRegExp(token) : `\\b${escapeRegExp(token)}\\b`, 'i'),
         };
