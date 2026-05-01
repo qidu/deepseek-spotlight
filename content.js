@@ -23,17 +23,19 @@
   const MIN_DYNAMIC_DOCS = 3;
   const DYNAMIC_TITLE_FALLBACK_SIZE = 2;
   const DYNAMIC_CATEGORY_SOURCE_PRIORITY = {
-    noun: 0,
-    prefix: 1,
-    postfix: 2,
+    adj_noun: 0,
+    noun: 1,
+    verb: 2,
+    prefix: 3,
+    postfix: 4,
   };
   const DYNAMIC_CATEGORY_CUSTOM_NOUNS = [
     'ai', 'agent', 'agents', 'api', 'apis', 'app', 'apps', 'auth', 'authentication', 'authorization', 'backend', 'benchmark', 'benchmarks', 'browser', 'bug', 'bugs', 'cache', 'chat', 'chats', 'ci', 'cli', 'client', 'cloud', 'code', 'commit', 'commits', 'component', 'components', 'container', 'containers', 'css', 'dashboard', 'data', 'database', 'databases', 'debug', 'deploy', 'deployment', 'deployments', 'design', 'diff', 'docker', 'docs', 'documentation', 'embedding', 'embeddings', 'endpoint', 'endpoints', 'error', 'errors', 'feature', 'features', 'fix', 'frontend', 'git', 'github', 'golang', 'hook', 'hooks', 'html', 'http', 'https', 'issue', 'issues', 'java', 'javascript', 'job', 'jobs', 'json', 'jwt', 'kubernetes', 'k8s', 'layout', 'library', 'libraries', 'linux', 'llm', 'log', 'logs', 'macos', 'manifest', 'migration', 'migrations', 'model', 'models', 'module', 'modules', 'monitor', 'monitoring', 'mysql', 'network', 'node', 'npm', 'oauth', 'panel', 'pipeline', 'pipelines', 'plugin', 'plugins', 'postgres', 'postgresql', 'prompt', 'prompts', 'python', 'query', 'queries', 'react', 'redis', 'refactor', 'release', 'repo', 'repository', 'request', 'requests', 'response', 'responses', 'routing', 'rust', 'schema', 'schemas', 'script', 'scripts', 'search', 'sdk', 'server', 'service', 'services', 'session', 'sessions', 'shell', 'sidebar', 'sql', 'state', 'storage', 'style', 'styles', 'tailwind', 'task', 'tasks', 'terminal', 'test', 'tests', 'theme', 'token', 'tokens', 'typescript', 'ui', 'url', 'user', 'users', 'vector', 'vectors', 'version', 'vite', 'vue', 'web', 'webhook', 'webpack', 'widget', 'window', 'workflow', 'workflows', 'extension', 'extensions', 'spotlight', 'deepseek',
     'machine learning', 'artificial intelligence', 'deep learning', 'natural language processing', 'prompt engineering', 'context window', 'vector database', 'rate limit', 'release note', 'release notes', 'pull request', 'pull requests', 'code review', 'chat session', 'chat sessions', 'dynamic category', 'dynamic categories', 'default category', 'search panel', 'content script', 'chrome extension', 'browser extension'
   ];
   const ENGLISH_DYNAMIC_CATEGORY_BLOCKLIST = new Set([
-    'a', 'an', 'another', 'any', 'anybody', 'anyone', 'anything', 'both', 'each', 'either', 'enough', 'every', 'everybody', 'everyone', 'everything', 'few', 'fewer', 'he', 'her', 'hers', 'herself', 'hey', 'him', 'himself', 'his', 'i', 'it', 'its', 'itself', 'little', 'many', 'me', 'mine', 'more', 'most', 'much', 'my', 'myself', 'neither', 'no', 'nobody', 'none', 'nothing', 'oh', 'other', 'others', 'ouch', 'our', 'ours', 'ourselves', 'several', 'she', 'some', 'somebody', 'someone', 'something', 'such', 'that', 'the', 'their', 'theirs', 'them', 'themselves', 'these', 'they', 'this', 'those', 'to', 'us', 'we', 'what', 'whatever', 'which', 'whichever', 'who', 'whom', 'whose', 'wow', 'you', 'your', 'yours', 'yourself', 'yourselves',
-    'about', 'above', 'across', 'after', 'against', 'alas', 'along', 'among', 'around', 'as', 'at', 'before', 'behind', 'below', 'beneath', 'beside', 'besides', 'between', 'beyond', 'by', 'down', 'for', 'from', 'in', 'inside', 'into', 'near', 'of', 'off', 'on', 'onto', 'out', 'outside', 'over', 'through', 'throughout', 'toward', 'towards', 'under', 'underneath', 'up', 'upon', 'with', 'within', 'without',
+    'a', 'an', 'and', 'another', 'any', 'anybody', 'anyone', 'anything', 'because', 'both', 'but', 'each', 'either', 'enough', 'every', 'everybody', 'everyone', 'everything', 'few', 'fewer', 'he', 'her', 'hers', 'herself', 'hey', 'him', 'himself', 'his', 'i', 'it', 'its', 'itself', 'little', 'many', 'me', 'mine', 'more', 'most', 'much', 'my', 'myself', 'neither', 'no', 'nobody', 'none', 'nor', 'nothing', 'oh', 'or', 'other', 'others', 'ouch', 'our', 'ours', 'ourselves', 'several', 'she', 'so', 'some', 'somebody', 'someone', 'something', 'such', 'that', 'the', 'their', 'theirs', 'them', 'themselves', 'these', 'they', 'this', 'those', 'to', 'us', 'we', 'what', 'whatever', 'which', 'whichever', 'who', 'whom', 'whose', 'wow', 'you', 'your', 'yours', 'yourself', 'yourselves',
+    'about', 'above', 'across', 'after', 'against', 'alas', 'along', 'although', 'among', 'around', 'as', 'at', 'before', 'behind', 'below', 'beneath', 'beside', 'besides', 'between', 'beyond', 'by', 'down', 'for', 'from', 'in', 'inside', 'into', 'near', 'of', 'off', 'on', 'onto', 'out', 'outside', 'over', 'through', 'throughout', 'toward', 'towards', 'under', 'underneath', 'up', 'upon', 'with', 'within', 'without',
   ]);
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -152,6 +154,18 @@
     );
   }
 
+  function isDynamicVerb(token, postag = getDynamicPostag()) {
+    if (!postag) return false;
+    const pos = getSegmentPosValue(token);
+    return Boolean(pos === postag.D_V || (pos & postag.D_V));
+  }
+
+  function isDynamicAdjective(token, postag = getDynamicPostag()) {
+    if (!postag) return false;
+    const pos = getSegmentPosValue(token);
+    return Boolean(pos === postag.D_A || (pos & postag.D_A));
+  }
+
   function createDynamicCandidate(rawValue, source, position) {
     const normalized = normalizeDynamicToken(rawValue);
     if (!normalized) return null;
@@ -192,8 +206,20 @@
       orderedCandidates.push(candidate);
     };
 
+    for (let i = 0; i < plainTokens.length; i++) {
+      const current = plainTokens[i];
+      const next = plainTokens[i + 1];
+      if (isDynamicAdjective(current) && next && isDynamicNoun(next)) {
+        pushCandidate(createDynamicCandidate(`${current.w} ${next.w}`, 'adj_noun', order++));
+      }
+    }
+
     for (const token of plainTokens) {
       if (isDynamicNoun(token)) pushCandidate(createDynamicCandidate(token.w, 'noun', order++));
+    }
+
+    for (const token of plainTokens) {
+      if (isDynamicVerb(token)) pushCandidate(createDynamicCandidate(token.w, 'verb', order++));
     }
 
     for (const candidate of buildDynamicEdgeCandidates(title, order)) {
@@ -217,6 +243,21 @@
       || (b.length - a.length)
       || (a.position - b.position)
       || (a.rank - b.rank);
+  }
+
+  function createDynamicDef(token, count, meta) {
+    return {
+      name: token,
+      token,
+      icon: '🏷️',
+      docFreq: count,
+      isCJK: meta.isCJK,
+      length: meta.length,
+      source: meta.source,
+      sourcePriority: meta.sourcePriority,
+      firstSeenOrder: meta.firstSeenOrder,
+      pattern: new RegExp(meta.isCJK ? escapeRegExp(token) : `\\b${escapeRegExp(token)}\\b`, 'i'),
+    };
   }
 
   function buildDynamicCategoryModel(list) {
@@ -253,18 +294,7 @@
           sourcePriority: DYNAMIC_CATEGORY_SOURCE_PRIORITY.noun,
           firstSeenOrder: Number.MAX_SAFE_INTEGER,
         };
-        return {
-          name: token,
-          token,
-          icon: '🏷️',
-          docFreq: count,
-          isCJK: meta.isCJK,
-          length: meta.length,
-          source: meta.source,
-          sourcePriority: meta.sourcePriority,
-          firstSeenOrder: meta.firstSeenOrder,
-          pattern: new RegExp(meta.isCJK ? escapeRegExp(token) : `\\b${escapeRegExp(token)}\\b`, 'i'),
-        };
+        return createDynamicDef(token, count, meta);
       })
       .sort(compareDynamicDefs)
       .map((def, index) => ({ ...def, rank: index }));
@@ -272,6 +302,7 @@
     const defsByToken = new Map(defs.map(def => [def.token, def]));
     const sessionAssignments = new Map();
     const assignedCounts = new Map();
+    const singleUseFallbackDefs = new Map();
 
     for (const session of list) {
       const analysis = sessionTokens.get(session.id) || analyzeSessionTokens(session.title || '');
@@ -293,8 +324,30 @@
       }
     }
 
+    for (const session of list) {
+      const assigned = sessionAssignments.get(session.id) || GENERAL_CATEGORY;
+      if (assigned.name === GENERAL_CATEGORY.name) {
+        const analysis = sessionTokens.get(session.id) || analyzeSessionTokens(session.title || '');
+        const fallbackCandidate = analysis.orderedTokens.find(entry => entry.source === 'prefix' || entry.source === 'postfix');
+        if (fallbackCandidate) {
+          let fallbackDef = singleUseFallbackDefs.get(fallbackCandidate.value);
+          if (!fallbackDef) {
+            fallbackDef = createDynamicDef(fallbackCandidate.value, 1, {
+              isCJK: fallbackCandidate.isCJK,
+              length: fallbackCandidate.length,
+              source: fallbackCandidate.source,
+              sourcePriority: fallbackCandidate.sourcePriority,
+              firstSeenOrder: firstSeenCounter++,
+            });
+            singleUseFallbackDefs.set(fallbackCandidate.value, fallbackDef);
+          }
+          sessionAssignments.set(session.id, fallbackDef);
+        }
+      }
+    }
+
     for (const [sessionId, assigned] of sessionAssignments.entries()) {
-      if (assigned.name !== GENERAL_CATEGORY.name && (assignedCounts.get(assigned.name) || 0) < 2) {
+      if (assigned.name !== GENERAL_CATEGORY.name && assigned.docFreq >= MIN_DYNAMIC_DOCS && (assignedCounts.get(assigned.name) || 0) < 2) {
         sessionAssignments.set(sessionId, GENERAL_CATEGORY);
       }
     }
@@ -335,35 +388,55 @@
     return ordered;
   }
 
-  // ── Fuzzy Search ──────────────────────────────────────────────────────────
+  // ── Search ────────────────────────────────────────────────────────────────
+
+  function isEnglishSearchTerm(text) {
+    return /^[a-zA-Z]+$/.test(String(text || '').trim());
+  }
 
   function fuzzyMatch(queryStr, title) {
     if (!queryStr) return { matched: true, score: 0, ranges: [] };
-    const q = queryStr.toLowerCase();
-    const t = title.toLowerCase();
-    let qi = 0;
-    const ranges = [];
-    let runStart = -1;
 
-    for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-      if (t[ti] === q[qi]) {
-        if (runStart === -1) runStart = ti;
-        qi++;
-        if (qi === q.length || (ti + 1 < t.length && t[ti + 1] !== q[qi])) {
-          ranges.push([runStart, ti]);
-          runStart = -1;
+    const query = String(queryStr || '').trim();
+    const source = String(title || '');
+    if (!query || !source) return { matched: false, score: Infinity, ranges: [] };
+
+    if (isEnglishSearchTerm(query)) {
+      const loweredQuery = query.toLowerCase();
+      if (loweredQuery.length < 3) return { matched: false, score: Infinity, ranges: [] };
+
+      const ranges = [];
+      const wordRegex = /[a-zA-Z]+/g;
+      let match;
+      while ((match = wordRegex.exec(source)) !== null) {
+        const word = match[0];
+        const loweredWord = word.toLowerCase();
+        if (loweredWord.length < loweredQuery.length) continue;
+        if (loweredWord.startsWith(loweredQuery)) {
+          ranges.push([match.index, match.index + loweredQuery.length - 1]);
+          continue;
         }
-      } else {
-        if (runStart !== -1) { ranges.push([runStart, ti - 1]); runStart = -1; }
+        if (loweredWord.endsWith(loweredQuery)) {
+          ranges.push([match.index + word.length - loweredQuery.length, match.index + word.length - 1]);
+        }
       }
-    }
-    if (runStart !== -1) ranges.push([runStart, t.length - 1]);
 
-    const matched = qi === q.length;
-    const score = matched
-      ? -(ranges.reduce((s, [a, b]) => s + (b - a + 1) * (b - a + 1), 0))
-      : Infinity;
-    return { matched, score, ranges };
+      return {
+        matched: ranges.length > 0,
+        score: ranges.length > 0 ? -ranges.reduce((sum, [start, end]) => sum + (end - start + 1), 0) : Infinity,
+        ranges,
+      };
+    }
+
+    const loweredSource = source.toLowerCase();
+    const loweredQuery = query.toLowerCase();
+    const start = loweredSource.indexOf(loweredQuery);
+    if (start === -1) return { matched: false, score: Infinity, ranges: [] };
+    return {
+      matched: true,
+      score: -loweredQuery.length,
+      ranges: [[start, start + loweredQuery.length - 1]],
+    };
   }
 
   function highlightTitle(title, ranges) {

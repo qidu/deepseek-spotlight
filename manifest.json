@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "DeepSeek Spotlight",
-  "version": "1.2.6",
-  "description": "Cmd+L(Ctrl+L) spotlight panel for displaying and searching DeepSeek chat sessions better",
+  "version": "1.3.0",
+  "description": "Cmd+K(Ctrl+K) spotlight panel for displaying and searching DeepSeek chat sessions better",
   "host_permissions": ["https://chat.deepseek.com/*"],
   "content_scripts": [
     {
